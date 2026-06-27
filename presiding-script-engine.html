@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presiding Script Engine</title>
+<style>
+  :root{
+    --ink:#16243d;
+    --ink-soft:#2c3e5c;
+    --brass:#a87c2a;
+    --brass-lt:#c79a45;
+    --paper:#f7f3e9;
+    --paper-rule:#e4dcc8;
+    --bg:#eceff3;
+    --surface:#ffffff;
+    --text:#1b212c;
+    --muted:#6c7686;
+    --rule:#dce1e8;
+    --danger:#9a3b2f;
+    --shadow:0 1px 2px rgba(22,36,61,.06),0 8px 24px rgba(22,36,61,.08);
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--ui);
+    color:var(--text);
+    background:var(--bg);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding:12px 20px;
+    background:var(--ink);
+    color:#eef2f8;
+    box-shadow:0 1px 0 rgba(0,0,0,.2);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+  .brand .mark{
+    font-family:var(--serif);font-weight:700;font-size:19px;letter-spacing:.2px;
+    color:#fff;
+  }
+  .brand .mark b{color:var(--brass-lt);font-weight:700}
+  .brand .sub{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#9fb0c8}
+  .topbar label{font-size:12px;color:#aebccf;margin-right:6px}
+  .topbar select{
+    font-family:var(--ui);font-size:13px;color:#16243d;background:#fff;
+    border:1px solid #2c3e5c;border-radius:6px;padding:6px 9px;
+  }
+  .topbar select:disabled{opacity:.55}
+  .btn{
+    font-family:var(--ui);font-size:13px;font-weight:600;
+    border:1px solid transparent;border-radius:6px;padding:7px 14px;cursor:pointer;
+  }
+  .btn-print{background:var(--brass);color:#fff}
+  .btn-print:hover{background:var(--brass-lt)}
+  .btn-ghost{background:transparent;color:#cdd9e8;border-color:#39496580}
+  .btn-ghost:hover{border-color:#5a6c8a;color:#fff}
+
+  /* ---------- Layout ---------- */
+  .wrap{
+    display:grid;
+    grid-template-columns:minmax(360px,440px) 1fr;
+    gap:0;
+    align-items:start;
+    min-height:calc(100vh - 57px);
+  }
+  .builder{
+    padding:20px;
+    border-right:1px solid var(--rule);
+    background:var(--surface);
+    min-width:0;
+  }
+  .preview-pane{
+    padding:28px 24px 60px;
+    min-width:0;
+    background:var(--bg);
+  }
+  @media(max-width:900px){
+    .wrap{grid-template-columns:1fr}
+    .builder{border-right:none;border-bottom:1px solid var(--rule)}
+  }
+
+  /* ---------- Builder ---------- */
+  .group{margin-bottom:22px}
+  .group > h2{
+    font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--brass);margin:0 0 10px;font-weight:700;
+    display:flex;align-items:center;gap:8px;
+  }
+  .group > h2::after{content:"";flex:1;height:1px;background:var(--rule)}
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+  .field input[type=text],.field select,.field textarea{
+    width:100%;font-family:var(--ui);font-size:13.5px;color:var(--text);
+    border:1px solid var(--rule);border-radius:6px;padding:8px 10px;background:#fff;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{
+    outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(168,124,42,.13)
+  }
+  .field textarea{resize:vertical;min-height:54px;line-height:1.4}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:7px;cursor:pointer}
+  .check input{accent-color:var(--brass);width:15px;height:15px}
+
+  /* agenda items */
+  .agenda-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .agenda-head h2{margin:0}
+  .agenda-list{display:flex;flex-direction:column;gap:9px}
+  .item{
+    border:1px solid var(--rule);border-radius:8px;background:#fcfcfa;
+    box-shadow:var(--shadow);overflow:hidden;
+  }
+  .item-bar{
+    display:flex;align-items:center;gap:8px;padding:8px 10px;
+    background:#f3f4f1;border-bottom:1px solid var(--rule);
+  }
+  .grip{cursor:grab;color:#aab2bf;font-size:13px;line-height:1;padding:0 1px;user-select:none}
+  .grip:active{cursor:grabbing}
+  .item.dragging{opacity:.45}
+  .item.over-top{box-shadow:inset 0 3px 0 0 var(--brass),var(--shadow)}
+  .item.over-bot{box-shadow:inset 0 -3px 0 0 var(--brass),var(--shadow)}
+  .item-bar .num{
+    font-family:var(--serif);font-weight:700;font-size:13px;color:var(--brass);
+    min-width:18px;text-align:center;
+  }
+  .item-bar .ttl{font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item-bar .tools{display:flex;gap:2px}
+  .icon-btn{
+    border:none;background:transparent;cursor:pointer;color:var(--muted);
+    width:26px;height:26px;border-radius:5px;font-size:14px;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:hover{background:#e6e8e3;color:var(--ink)}
+  .icon-btn.del:hover{background:#f3e1de;color:var(--danger)}
+  .icon-btn:disabled{opacity:.3;cursor:default;background:transparent}
+  .item-body{padding:10px 11px}
+  .item-body .field:last-child{margin-bottom:0}
+  .subitems{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+  .subitem{display:flex;gap:6px;align-items:flex-start}
+  .subitem textarea{flex:1}
+  .mini{
+    font-size:12px;font-weight:600;color:var(--brass);background:transparent;
+    border:1px dashed var(--brass);border-radius:6px;padding:6px 10px;cursor:pointer;margin-top:6px;
+  }
+  .mini:hover{background:rgba(168,124,42,.07)}
+
+  .add-row{position:relative;margin-top:12px}
+  .add-row select{
+    width:100%;font-family:var(--ui);font-size:13px;padding:9px 10px;border-radius:7px;
+    border:1px dashed var(--ink-soft);color:var(--ink);background:#fff;font-weight:600;cursor:pointer;
+  }
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.45}
+
+  /* ---------- Script preview ---------- */
+  .sheet{
+    background:var(--paper);
+    color:#241f17;
+    max-width:760px;margin:0 auto;
+    border:1px solid var(--paper-rule);
+    box-shadow:0 1px 2px rgba(0,0,0,.05),0 14px 40px rgba(22,36,61,.13);
+    padding:46px 54px 60px;
+    font-family:var(--serif);
+  }
+  .sheet-head{text-align:center;border-bottom:2px solid var(--brass);padding-bottom:16px;margin-bottom:8px}
+  .sheet-head .org{font-size:23px;font-weight:700;letter-spacing:.2px;color:#1c1a14;line-height:1.2}
+  .sheet-head .kind{
+    font-family:var(--ui);font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--brass);margin-top:7px;font-weight:700;
+  }
+  .sheet-head .meta{font-family:var(--ui);font-size:12px;color:#6a6353;margin-top:9px;line-height:1.5}
+  .sheet-title{
+    font-family:var(--ui);text-align:center;font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:#8a8270;margin:4px 0 22px;font-weight:600;
+  }
+
+  .ai{margin:0 0 20px;page-break-inside:avoid}
+  .ai-h{
+    display:flex;align-items:baseline;gap:11px;margin-bottom:9px;
+    border-bottom:1px solid var(--paper-rule);padding-bottom:5px;
+  }
+  .ai-h .n{font-size:14px;font-weight:700;color:var(--brass);font-feature-settings:"tnum"}
+  .ai-h .t{font-size:16px;font-weight:700;color:#1c1a14;letter-spacing:.2px}
+
+  .line{margin:0 0 8px;padding-left:108px;position:relative;font-size:15.5px;line-height:1.55}
+  .line .who{
+    position:absolute;left:0;top:1px;width:96px;text-align:right;
+    font-family:var(--ui);font-size:10.5px;font-weight:700;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .line.cue .said{color:#211d15}
+  .line.cue .said .var{
+    font-style:italic;color:#5a4a1f;background:rgba(168,124,42,.10);
+    padding:0 2px;border-radius:2px;
+  }
+  .line.direction{padding-left:108px;color:#7c7361;font-style:italic;font-size:14px}
+  .line.direction::before{content:"";}
+  .line.note{
+    padding:6px 12px 6px 108px;color:#6a6253;font-family:var(--ui);font-size:12.5px;
+    font-style:normal;
+  }
+  .line.note .said{display:block;border-left:2px solid var(--paper-rule);padding-left:10px;margin-left:-10px}
+  .para{font-size:14.5px;line-height:1.62;margin:0 0 12px;color:#2a251b}
+  .bullet{font-size:14px;line-height:1.5;margin:2px 0 2px 24px;position:relative;padding-left:15px;color:#2a251b}
+  .bullet::before{content:"•";position:absolute;left:0;color:var(--brass)}
+  .rap{
+    display:inline-block;font-family:var(--ui);font-size:9.5px;font-weight:700;letter-spacing:.1em;
+    color:#fff;background:var(--brass);border-radius:3px;padding:1px 5px;vertical-align:1px;margin-right:6px;
+  }
+  .sitting{
+    margin:30px 0 14px;padding:11px 16px;background:var(--ink);color:#f2f5fa;border-radius:7px;
+    text-align:center;page-break-after:avoid;page-break-inside:avoid;
+  }
+  .sitting-h{font-family:var(--serif);font-size:17px;font-weight:700;letter-spacing:.3px}
+  .sitting-m{font-family:var(--ui);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#9fb0c8;margin-top:3px}
+
+  /* appendix */
+  .appendix{margin-top:38px;border-top:2px solid var(--brass);padding-top:20px;page-break-before:always}
+  .appendix h3{
+    font-family:var(--ui);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--brass);font-weight:700;margin:0 0 4px;
+  }
+  .appendix .lead{font-family:var(--ui);font-size:12.5px;color:#6a6253;margin:0 0 18px}
+  .ref{margin-bottom:16px;page-break-inside:avoid}
+  .ref .name{font-size:15px;font-weight:700;color:#1c1a14;margin-bottom:2px}
+  .ref .say{font-size:14.5px;color:#322b1c;margin-bottom:3px}
+  .ref .say .lbl{font-family:var(--ui);font-size:10px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--ink-soft);margin-right:6px}
+  .ref .chars{font-family:var(--ui);font-size:11.5px;color:#7c7361;display:flex;flex-wrap:wrap;gap:4px 14px}
+  .ref .chars span b{color:#54493a;font-weight:600}
+
+  .sheet-foot{
+    margin-top:34px;padding-top:12px;border-top:1px solid var(--paper-rule);
+    font-family:var(--ui);font-size:10.5px;color:#9a917e;text-align:center;line-height:1.5;
+  }
+  .empty{font-family:var(--ui);color:#9a917e;text-align:center;padding:40px 0;font-size:13.5px}
+
+  /* ---------- Print ---------- */
+  @media print{
+    @page{margin:0.85in 0.9in}
+    body{background:#fff}
+    .topbar,.builder,.add-row,.no-print{display:none!important}
+    .wrap{display:block}
+    .preview-pane{padding:0;background:#fff}
+    .sheet{
+      max-width:none;margin:0;border:none;box-shadow:none;background:#fff;color:#000;
+      padding:0;font-size:12.5pt;
+    }
+    .sheet-head .org{color:#000}
+    .line{font-size:12.5pt;page-break-inside:avoid}
+    .line.cue .said .var{background:transparent;color:#000;font-style:italic;text-decoration:underline}
+    .ai-h .t,.ref .name{color:#000}
+    .ai-h .n,.line .who,.ref .say .lbl{color:#000}
+    .sitting{background:#fff;color:#000;border:0;border-top:2px solid #000;border-bottom:1px solid #000;border-radius:0}
+    .sitting-m{color:#000}
+    .para,.bullet{font-size:12pt;color:#000}
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">Motion <b>Carried</b></span>
+    <span class="sub">Presiding Script Engine</span>
+  </div>
+  <div>
+    <label for="authoritySel">Authority</label>
+    <select id="authoritySel">
+      <option value="RONR" selected>RONR (12th ed.)</option>
+      <option value="AIPSC" disabled>AIPSC — add source to enable</option>
+    </select>
+  </div>
+  <div>
+    <label for="typeSel">Meeting type</label>
+    <select id="typeSel">
+      <option value="regular">Regular meeting</option>
+      <option value="board">Board meeting</option>
+      <option value="annual">Annual meeting</option>
+      <option value="special">Special meeting</option>
+      <option value="adjourned">Adjourned meeting</option>
+      <option value="convention">Convention</option>
+      <option value="mass">Mass meeting</option>
+    </select>
+  </div>
+  <div>
+    <label for="docSel">Document</label>
+    <select id="docSel">
+      <option value="script">Presiding script</option>
+      <option value="agenda">Agenda</option>
+      <option value="notice">Notice / call</option>
+      <option value="minutes">Minutes shell</option>
+    </select>
+  </div>
+  <button class="btn btn-ghost" id="loadBtn">Reset to standard order</button>
+  <button class="btn btn-ghost" id="printBtn">Print</button>
+  <button class="btn btn-print" id="pdfBtn">Download PDF</button>
+</div>
+
+<div class="wrap">
+  <!-- ============ BUILDER ============ -->
+  <div class="builder">
+    <div class="group">
+      <h2>Organization profile</h2>
+      <div class="field">
+        <label>Organization name</label>
+        <input type="text" id="orgName" placeholder="Riverside Civic Association">
+      </div>
+      <div class="field">
+        <label>How the chair is addressed</label>
+        <select id="chairAddress">
+          <option>Madam President</option>
+          <option>Mr. President</option>
+          <option>Madam Chairman</option>
+          <option>Mr. Chairman</option>
+          <option>Madam Chair</option>
+          <option>Mr. Chair</option>
+        </select>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Date</label><input type="text" id="mDate" placeholder="June 27, 2026"></div>
+        <div class="field"><label>Time</label><input type="text" id="mTime" placeholder="7:00 p.m."></div>
+        <div class="field"><label>Place</label><input type="text" id="mPlace" placeholder="Town Hall"></div>
+      </div>
+      <div id="adjBlock" style="display:none">
+        <div class="row2">
+          <div class="field"><label>Adjourned meeting of a…</label>
+            <select id="adjParentType"><option value="regular">Regular meeting</option><option value="special">Special meeting</option></select></div>
+          <div class="field"><label>…held on</label><input type="text" id="adjParentDate" placeholder="June 13, 2026"></div>
+        </div>
+        <p class="hint" style="margin-top:0">The header identifies this as an adjourned meeting of the meeting named here, and its minutes are read at this meeting.</p>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="agenda-head">
+        <h2 style="margin:0">Agenda</h2>
+      </div>
+      <div class="agenda-list" id="agendaList"></div>
+      <div class="add-row">
+        <select id="addSelect">
+          <option value="">+ Add agenda item…</option>
+          <optgroup label="Procedural">
+            <option value="call_to_order">Call to order</option>
+            <option value="opening">Opening ceremonies</option>
+            <option value="roll_call">Quorum / roll call</option>
+            <option value="minutes">Reading & approval of minutes</option>
+            <option value="adjournment">Adjournment</option>
+          </optgroup>
+          <optgroup label="Reports">
+            <option value="officer_reports">Reports of officers</option>
+            <option value="committee_reports">Reports of committees</option>
+          </optgroup>
+          <optgroup label="Business">
+            <option value="special_order">Special orders</option>
+            <option value="unfinished_business">Unfinished business & general orders</option>
+            <option value="new_business">New business</option>
+            <option value="called_business">Business stated in the call</option>
+            <option value="consent_agenda">Consent agenda</option>
+            <option value="announcements">Announcements</option>
+            <option value="good_of_order">Good of the order</option>
+            <option value="program">Program</option>
+          </optgroup>
+          <optgroup label="Annual / Convention">
+            <option value="election">Election of officers</option>
+            <option value="nominations_floor">Nominations from the floor</option>
+            <option value="installation">Installation of officers</option>
+            <option value="credentials">Credentials report</option>
+            <option value="standing_rules">Adopt convention standing rules</option>
+            <option value="program_adoption">Adopt the program</option>
+            <option value="resolutions">Resolutions</option>
+          </optgroup>
+          <optgroup label="Sessions &amp; breaks">
+            <option value="sitting">New sitting (convention)</option>
+            <option value="recess">Recess / reconvene</option>
+          </optgroup>
+          <optgroup label="Mass meeting">
+            <option value="mass_call">Mass meeting — call to order</option>
+            <option value="elect_chairman">Elect a chairman</option>
+            <option value="elect_secretary">Elect a secretary</option>
+            <option value="statement_purpose">Statement of purpose</option>
+          </optgroup>
+        </select>
+      </div>
+      <p class="hint">Pick a meeting type above and choose <b>Load standard agenda</b> for a RONR skeleton, then edit. Or build item-by-item here.</p>
+    </div>
+  </div>
+
+  <!-- ============ PREVIEW ============ -->
+  <div class="preview-pane">
+    <div class="sheet" id="sheet"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------------- State ---------------- */
+const state = {
+  authority:"RONR",
+  type:"regular",
+  docType:"script",
+  profile:{ orgName:"", chairAddress:"Madam President", mDate:"", mTime:"", mPlace:"", adjParentType:"regular", adjParentDate:"" },
+  agenda:[]
+};
+let uid = 1;
+const nid = () => "i"+(uid++);
+
+/* ---------------- Item factory ---------------- */
+function makeItem(kind){
+  const base={id:nid(),kind};
+  const d={
+    call_to_order:{},
+    opening:{pledge:true,invocation:false,invocationBy:""},
+    roll_call:{method:"chair_silent"},
+    minutes:{priorDate:"",mode:"distributed"},
+    officer_reports:{reports:[{officer:"Treasurer",reporter:"",action:"file",recommendation:""}]},
+    committee_reports:{reports:[{committee:"Finance",reporter:"",recommendation:""}]},
+    special_order:{items:[{text:""}]},
+    unfinished_business:{items:[{text:""}]},
+    new_business:{items:[{text:""}]},
+    called_business:{items:[{text:""}]},
+    announcements:{text:""},
+    program:{description:""},
+    election:{offices:[{office:"President",nominee:""}]},
+    credentials:{},
+    standing_rules:{},
+    program_adoption:{},
+    resolutions:{items:[{text:""}]},
+    consent_agenda:{items:[{text:""}]},
+    good_of_order:{},
+    nominations_floor:{offices:[{office:""}]},
+    installation:{installer:"",offices:[{office:"",name:""}]},
+    adjournment:{sineDie:false},
+    recess:{mode:"recess",untilTime:"",label:""},
+    sitting:{label:"",day:"",time:"",readMinutes:true},
+    mass_call:{},
+    elect_chairman:{nominee:""},
+    elect_secretary:{nominee:""},
+    statement_purpose:{text:""}
+  }[kind]||{};
+  return Object.assign(base,structuredClone(d));
+}
+
+/* ---------------- Standard agendas ---------------- */
+const SKELETON={
+  /* RONR standard order of business */
+  regular:["call_to_order","opening","roll_call","minutes","officer_reports","committee_reports","special_order","unfinished_business","new_business","announcements","adjournment"],
+  /* Board: leaner — no ceremonies/quorum step */
+  board:["call_to_order","minutes","officer_reports","committee_reports","unfinished_business","new_business","adjournment"],
+  /* Special meeting (RONR §9): only business named in the call may be transacted */
+  special:["call_to_order","opening","called_business","adjournment"],
+  /* Adjourned meeting (RONR §9, §22): continues the prior meeting; resumes where it left off */
+  adjourned:["call_to_order","opening","minutes","unfinished_business","new_business","adjournment"],
+  /* Annual: standard order with elections set as a special order */
+  annual:["call_to_order","opening","roll_call","minutes","officer_reports","committee_reports","special_order","election","unfinished_business","new_business","announcements","adjournment"],
+  /* Convention: organize first (credentials → standing rules → program), then business */
+  convention:["call_to_order","opening","credentials","standing_rules","program_adoption","officer_reports","committee_reports","special_order","unfinished_business","new_business","resolutions","election","announcements","adjournment"],
+  /* Mass meeting: RONR §53 — convene, elect chair & secretary, state purpose, then business */
+  mass:["mass_call","elect_chairman","elect_secretary","statement_purpose","new_business","adjournment"]
+};
+function buildSkeleton(){
+  const arr=SKELETON[state.type]||SKELETON.regular;
+  state.agenda=arr.map(makeItem);
+  if(state.type==="convention"){
+    const adj=state.agenda.find(i=>i.kind==="adjournment");
+    if(adj) adj.sineDie=true;
+  }
+}
+function loadSkeleton(){
+  if(state.agenda.length && !confirm("Reset the agenda to the standard "+typeLabel(state.type).toLowerCase()+" order of business? Current edits will be replaced.")) return;
+  buildSkeleton(); renderAll();
+}
+
+/* ---------------- Titles ---------------- */
+const KIND_TITLE={
+  call_to_order:"Call to Order",opening:"Opening Ceremonies",roll_call:"Quorum",
+  minutes:"Reading & Approval of Minutes",officer_reports:"Reports of Officers",committee_reports:"Reports of Committees",
+  special_order:"Special Orders",unfinished_business:"Unfinished Business and General Orders",new_business:"New Business",
+  called_business:"Business Stated in the Call",
+  consent_agenda:"Consent Agenda",good_of_order:"Good of the Order",
+  nominations_floor:"Nominations from the Floor",installation:"Installation of Officers",
+  announcements:"Announcements",program:"Program",election:"Election of Officers",
+  credentials:"Credentials Committee Report",standing_rules:"Adoption of Standing Rules",
+  program_adoption:"Adoption of the Program",resolutions:"Resolutions",adjournment:"Adjournment",recess:"Recess / Reconvene",sitting:"New Sitting",
+  mass_call:"Call to Order",elect_chairman:"Election of a Chairman",elect_secretary:"Election of a Secretary",
+  statement_purpose:"Statement of Purpose"
+};
+function typeLabel(t){return{regular:"Regular Meeting",board:"Board Meeting",annual:"Annual Meeting",special:"Special Meeting",adjourned:"Adjourned Meeting",convention:"Convention",mass:"Mass Meeting"}[t]||"Meeting";}
+
+/* ---------------- Builder render ---------------- */
+const $=s=>document.querySelector(s);
+const agendaList=$("#agendaList");
+
+function field(label,inputHTML){return `<div class="field"><label>${label}</label>${inputHTML}</div>`;}
+
+function renderItemBody(it){
+  const k=it.kind;
+  const ti=(name,val,ph="")=>`<input type="text" data-f="${name}" value="${esc(val||"")}" placeholder="${ph}">`;
+  switch(k){
+    case "opening":
+      return `<label class="check"><input type="checkbox" data-f="pledge" ${it.pledge?"checked":""}> Pledge of Allegiance</label>
+        <label class="check"><input type="checkbox" data-f="invocation" ${it.invocation?"checked":""}> Invocation</label>
+        ${it.invocation?field("Invocation led by",ti("invocationBy",it.invocationBy,"Rev. Adams")):""}`;
+    case "roll_call":
+      return field("How is a quorum established?",`<select data-f="method">
+          <option value="chair_silent" ${it.method==="chair_silent"?"selected":""}>Chair determines it — no announcement (RONR default)</option>
+          <option value="announce" ${it.method==="announce"?"selected":""}>Chair announces a quorum is present</option>
+          <option value="roll" ${it.method==="roll"?"selected":""}>Secretary calls the roll</option>
+          <option value="registration" ${it.method==="registration"?"selected":""}>From the registration / credentials count</option>
+        </select>`)
+        +`<p class="hint" style="margin-top:6px">RONR has the chair ascertain a quorum before calling to order, but prescribes no spoken declaration. Use an announcement only if your bylaws or customs call for it.</p>`;
+    case "minutes":
+      return field("Minutes of the meeting of",ti("priorDate",it.priorDate,"the last meeting"))
+        +field("Handling",`<select data-f="mode"><option value="distributed" ${it.mode==="distributed"?"selected":""}>distributed in advance</option><option value="read" ${it.mode==="read"?"selected":""}>read aloud</option><option value="committee" ${it.mode==="committee"?"selected":""}>approval delegated to a committee</option></select>`);
+    case "officer_reports":{
+      const rows=it.reports.map((r,i)=>`<div style="border:1px solid var(--rule);border-radius:7px;padding:9px 9px 4px;background:#fff;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <strong style="font-size:12px;color:var(--ink)">${esc(r.officer||"Officer")}</strong>
+          <button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></div>
+        <div class="row2">${field("Officer",`<input type="text" data-rep="${i}" data-rk="officer" value="${esc(r.officer)}" placeholder="Treasurer">`)}${field("Reporter",`<input type="text" data-rep="${i}" data-rk="reporter" value="${esc(r.reporter)}" placeholder="optional">`)}</div>
+        ${field("Disposition",`<select data-rep="${i}" data-rk="action"><option value="file" ${r.action==="file"?"selected":""}>Receive & file</option><option value="questions" ${r.action==="questions"?"selected":""}>Invite questions, then file</option></select>`)}
+        ${field("Recommendation, if any — scripted as a motion",`<textarea data-rep="${i}" data-rk="recommendation" placeholder="e.g., that the recommended dues increase be adopted">${esc(r.recommendation)}</textarea>`)}
+      </div>`).join("");
+      return `<div class="subitems">${rows}</div><button class="mini" data-repadd="officer">+ Add officer report</button>`;
+    }
+    case "committee_reports":{
+      const rows=it.reports.map((r,i)=>`<div style="border:1px solid var(--rule);border-radius:7px;padding:9px 9px 4px;background:#fff;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <strong style="font-size:12px;color:var(--ink)">${esc(r.committee||"Committee")} Committee</strong>
+          <button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></div>
+        <div class="row2">${field("Committee",`<input type="text" data-rep="${i}" data-rk="committee" value="${esc(r.committee)}" placeholder="Finance">`)}${field("Reporter",`<input type="text" data-rep="${i}" data-rk="reporter" value="${esc(r.reporter)}" placeholder="optional">`)}</div>
+        ${field("Recommendation, if any — scripted as a motion",`<textarea data-rep="${i}" data-rk="recommendation" placeholder="e.g., that the association adopt the proposed budget">${esc(r.recommendation)}</textarea>`)}
+      </div>`).join("");
+      return `<div class="subitems">${rows}</div><button class="mini" data-repadd="committee">+ Add committee report</button>
+        <p class="hint" style="margin-top:8px">Leave a recommendation blank and the report is simply received and filed. Fill it in and the full motion sequence is scripted inline.</p>`;
+    }
+    case "special_order":{
+      const rows=it.items.map((s,i)=>`<div class="subitem">
+        <textarea data-sub="${i}" placeholder="consideration of the proposed bylaw amendment">${esc(s.text)}</textarea>
+        <button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
+      return `<div class="subitems">${rows}</div><button class="mini" data-subadd="1">+ Add special order</button>
+        <p class="hint" style="margin-top:8px">Special orders are taken up in the order set. Leave empty if there are none.</p>`;
+    }
+    case "announcements":
+      return field("Announcements (one per line, or leave blank to invite from the floor)",`<textarea data-f="text" placeholder="The next meeting is July 25.">${esc(it.text)}</textarea>`);
+    case "program":
+      return field("Program",`<textarea data-f="description" placeholder="a presentation by the guest speaker">${esc(it.description)}</textarea>`);
+    case "statement_purpose":
+      return field("Purpose of the meeting",`<textarea data-f="text" placeholder="to consider forming a neighborhood association">${esc(it.text)}</textarea>`);
+    case "elect_chairman":
+      return field("Nominee (optional)",ti("nominee",it.nominee,"leave blank for open nominations"));
+    case "elect_secretary":
+      return field("Nominee (optional)",ti("nominee",it.nominee,"leave blank for open nominations"));
+    case "unfinished_business":
+    case "new_business":
+    case "called_business":
+    case "consent_agenda":
+    case "resolutions":{
+      const noun=k==="resolutions"?"resolution":(k==="called_business"||k==="consent_agenda")?"item":"motion";
+      const ph=k==="unfinished_business"?"the postponed motion to…":k==="resolutions"?"Resolved, that…":k==="called_business"?"an item named in the call, e.g., to approve the lease":k==="consent_agenda"?"a routine item, e.g., approval of the minutes":"to approve the annual budget of $45,000";
+      const rows=it.items.map((s,i)=>`<div class="subitem">
+        <textarea data-sub="${i}" placeholder="${ph}">${esc(s.text)}</textarea>
+        <button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
+      const tail=k==="called_business"
+        ? `<p class="hint" style="margin-top:8px">A special meeting may transact only the business named in the call. Each item is scripted as a main motion.</p>`
+        : `<p class="hint" style="margin-top:8px">Each entry is scripted inline with the full main-motion sequence. Leave one blank to invite ${noun}s from the floor.</p>`;
+      return `<div class="subitems">${rows}</div><button class="mini" data-subadd="1">+ Add ${noun}</button>${tail}`;
+    }
+    case "nominations_floor":{
+      const rows=it.offices.map((o,i)=>`<div class="subitem">
+        <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office (e.g., Director)" style="flex:1">
+        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+      return `<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add office</button>
+        <p class="hint" style="margin-top:8px">Opens and closes floor nominations for each office. Leave empty for a generic call for nominations.</p>`;
+    }
+    case "installation":{
+      const rows=it.offices.map((o,i)=>`<div class="subitem">
+        <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office" style="flex:1">
+        <input type="text" data-off="${i}" data-k="name" value="${esc(o.name||"")}" placeholder="Officer name" style="flex:1.3">
+        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+      return field("Installing officer (optional)",`<input type="text" data-f="installer" value="${esc(it.installer||"")}" placeholder="The Installing Officer">`)
+        +`<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add officer</button>
+        <p class="hint" style="margin-top:8px">Installation is ceremonial — RONR prescribes no fixed wording; this is a usable default to adapt.</p>`;
+    }
+    case "election":{
+      const rows=it.offices.map((o,i)=>`<div class="subitem">
+        <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office" style="flex:1">
+        <input type="text" data-off="${i}" data-k="nominee" value="${esc(o.nominee)}" placeholder="Nominee (optional)" style="flex:1.3">
+        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+      return `<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add office</button>`;
+    }
+    case "adjournment":
+      return state.type==="convention"
+        ? `<label class="check"><input type="checkbox" data-f="sineDie" ${it.sineDie?"checked":""}> Adjourn sine die (close the convention)</label>`
+        : `<p class="hint" style="margin:0">The chair calls for further business, then declares the meeting adjourned.</p>`;
+    case "sitting":
+      return `<div class="row2">${field("Sitting label",`<input type="text" data-f="label" value="${esc(it.label)}" placeholder="Second Business Meeting">`)}${field("Day / date",`<input type="text" data-f="day" value="${esc(it.day)}" placeholder="Saturday, June 14">`)}</div>`
+        +field("Time",`<input type="text" data-f="time" value="${esc(it.time)}" placeholder="9:00 a.m.">`)
+        +`<label class="check"><input type="checkbox" data-f="readMinutes" ${it.readMinutes?"checked":""}> Read &amp; approve the previous sitting's minutes</label>`
+        +`<p class="hint" style="margin:6px 0 0">Marks the start of a new sitting. Items below it are numbered fresh for that sitting.</p>`;
+    case "recess":
+      return field("Type of break",`<select data-f="mode">
+          <option value="recess" ${it.mode==="recess"?"selected":""}>Recess — short intermission, same meeting</option>
+          <option value="adjourn_to" ${it.mode==="adjourn_to"?"selected":""}>Adjourn to a later sitting, same session</option>
+        </select>`)
+        +`<div class="row2">${field("Reconvene at",`<input type="text" data-f="untilTime" value="${esc(it.untilTime)}" placeholder="2:00 p.m.">`)}${field("Next sitting label",`<input type="text" data-f="label" value="${esc(it.label)}" placeholder="Second Business Meeting">`)}</div>`
+        +`<p class="hint" style="margin-top:6px">Insert between sittings of a convention. Keep the final adjournment as <b>sine die</b>.</p>`;
+    default:
+      return `<p class="hint" style="margin:0">No options — standard RONR phrasing is applied.</p>`;
+  }
+}
+
+function renderAgenda(){
+  if(!state.agenda.length){
+    agendaList.innerHTML=`<p class="hint" style="text-align:center;padding:14px 0">No items yet. Load a standard agenda or add items below.</p>`;
+    return;
+  }
+  agendaList.innerHTML=state.agenda.map((it,idx)=>`
+    <div class="item" draggable="true" data-id="${it.id}">
+      <div class="item-bar">
+        <span class="grip" title="Drag to reorder">⠿</span>
+        <span class="num">${idx+1}</span>
+        <span class="ttl">${esc(KIND_TITLE[it.kind]||it.kind)}</span>
+        <span class="tools">
+          <button class="icon-btn mv" data-mv="-1" ${idx===0?"disabled":""} title="Move up">↑</button>
+          <button class="icon-btn mv" data-mv="1" ${idx===state.agenda.length-1?"disabled":""} title="Move down">↓</button>
+          <button class="icon-btn del" data-del="1" title="Remove">✕</button>
+        </span>
+      </div>
+      <div class="item-body">${renderItemBody(it)}</div>
+    </div>`).join("");
+}
+
+/* ---------------- Builder events (delegated) ---------------- */
+agendaList.addEventListener("input",e=>{
+  const card=e.target.closest(".item"); if(!card)return;
+  const it=state.agenda.find(x=>x.id===card.dataset.id); if(!it)return;
+  const t=e.target;
+  if(t.dataset.f!==undefined){
+    it[t.dataset.f]=t.type==="checkbox"?t.checked:t.value;
+  }else if(t.dataset.sub!==undefined){
+    it.items[+t.dataset.sub].text=t.value;
+  }else if(t.dataset.off!==undefined){
+    it.offices[+t.dataset.off][t.dataset.k]=t.value;
+  }else if(t.dataset.rep!==undefined){
+    it.reports[+t.dataset.rep][t.dataset.rk]=t.value;
+  }
+  renderSheet();
+});
+agendaList.addEventListener("change",e=>{
+  const card=e.target.closest(".item"); if(!card)return;
+  const it=state.agenda.find(x=>x.id===card.dataset.id); if(!it)return;
+  const t=e.target;
+  if(t.dataset.f && (t.dataset.f==="invocation"||t.dataset.f==="type"||t.dataset.f==="mode"||t.dataset.f==="action")){
+    if(t.type==="checkbox")it[t.dataset.f]=t.checked; else it[t.dataset.f]=t.value;
+    renderAgenda(); renderSheet();
+  }
+});
+agendaList.addEventListener("click",e=>{
+  const card=e.target.closest(".item"); if(!card)return;
+  const idx=state.agenda.findIndex(x=>x.id===card.dataset.id); if(idx<0)return;
+  const it=state.agenda[idx];const t=e.target;
+  if(t.dataset.del){ state.agenda.splice(idx,1); renderAll(); }
+  else if(t.dataset.mv){ const j=idx+(+t.dataset.mv); if(j>=0&&j<state.agenda.length){ [state.agenda[idx],state.agenda[j]]=[state.agenda[j],state.agenda[idx]]; renderAll(); } }
+  else if(t.dataset.subadd){ it.items.push({text:""}); renderAgenda(); renderSheet(); }
+  else if(t.dataset.subdel!==undefined){ it.items.splice(+t.dataset.subdel,1); if(!it.items.length)it.items.push({text:""}); renderAgenda(); renderSheet(); }
+  else if(t.dataset.offadd){ it.offices.push({office:"",nominee:"",name:""}); renderAgenda(); renderSheet(); }
+  else if(t.dataset.offdel!==undefined){ it.offices.splice(+t.dataset.offdel,1); if(!it.offices.length)it.offices.push({office:"",nominee:"",name:""}); renderAgenda(); renderSheet(); }
+  else if(t.dataset.repadd){
+    it.reports.push(t.dataset.repadd==="officer"?{officer:"",reporter:"",action:"file",recommendation:""}:{committee:"",reporter:"",recommendation:""});
+    renderAgenda(); renderSheet();
+  }
+  else if(t.dataset.repdel!==undefined){
+    it.reports.splice(+t.dataset.repdel,1);
+    if(!it.reports.length)it.reports.push(it.kind==="officer_reports"?{officer:"",reporter:"",action:"file",recommendation:""}:{committee:"",reporter:"",recommendation:""});
+    renderAgenda(); renderSheet();
+  }
+});
+
+/* drag-and-drop reordering (arrows remain for touch/keyboard) */
+let dragId=null;
+function clearDropMarks(){ agendaList.querySelectorAll(".item").forEach(c=>c.classList.remove("over-top","over-bot")); }
+agendaList.addEventListener("dragstart",e=>{
+  if(e.target.closest("input,textarea,select,button,.icon-btn")){ e.preventDefault(); return; }
+  const card=e.target.closest(".item"); if(!card)return;
+  dragId=card.dataset.id; card.classList.add("dragging");
+  e.dataTransfer.effectAllowed="move";
+  try{ e.dataTransfer.setData("text/plain",dragId); }catch(_){}
+});
+agendaList.addEventListener("dragend",()=>{
+  dragId=null;
+  agendaList.querySelectorAll(".item").forEach(c=>c.classList.remove("dragging","over-top","over-bot"));
+});
+agendaList.addEventListener("dragover",e=>{
+  if(dragId===null)return;
+  e.preventDefault(); e.dataTransfer.dropEffect="move";
+  const card=e.target.closest(".item");
+  if(!card||card.dataset.id===dragId){ clearDropMarks(); return; }
+  const r=card.getBoundingClientRect();
+  const before=(e.clientY-r.top)<r.height/2;
+  clearDropMarks();
+  card.classList.toggle("over-top",before);
+  card.classList.toggle("over-bot",!before);
+});
+agendaList.addEventListener("drop",e=>{
+  if(dragId===null)return;
+  e.preventDefault();
+  const card=e.target.closest(".item");
+  if(card&&card.dataset.id!==dragId){
+    const r=card.getBoundingClientRect();
+    const before=(e.clientY-r.top)<r.height/2;
+    const from=state.agenda.findIndex(x=>x.id===dragId);
+    if(from>=0){
+      const [moved]=state.agenda.splice(from,1);
+      let to=state.agenda.findIndex(x=>x.id===card.dataset.id);
+      state.agenda.splice(before?to:to+1,0,moved);
+    }
+  }
+  dragId=null; renderAll();
+});
+
+$("#addSelect").addEventListener("change",e=>{
+  if(!e.target.value)return;
+  state.agenda.push(makeItem(e.target.value));
+  e.target.value="";
+  renderAll();
+});
+
+/* profile + top controls */
+const pmap={orgName:"orgName",chairAddress:"chairAddress",mDate:"mDate",mTime:"mTime",mPlace:"mPlace",adjParentType:"adjParentType",adjParentDate:"adjParentDate"};
+Object.keys(pmap).forEach(id=>{
+  $("#"+id).addEventListener("input",e=>{ state.profile[pmap[id]]=e.target.value; renderSheet(); });
+  $("#"+id).addEventListener("change",e=>{ state.profile[pmap[id]]=e.target.value; renderSheet(); });
+});
+function updateTypeUI(){ $("#adjBlock").style.display = state.type==="adjourned" ? "block" : "none"; }
+$("#typeSel").addEventListener("change",e=>{ state.type=e.target.value; updateTypeUI(); buildSkeleton(); renderAll(); });
+$("#docSel").addEventListener("change",e=>{ state.docType=e.target.value; renderSheet(); });
+$("#loadBtn").addEventListener("click",loadSkeleton);
+$("#printBtn").addEventListener("click",()=>window.print());
+$("#pdfBtn").addEventListener("click",downloadPdf);
+
+/* ---------------- PDF export (vector text via jsPDF) ---------------- */
+function ensureJsPDF(){
+  return new Promise((res,rej)=>{
+    if(window.jspdf&&window.jspdf.jsPDF) return res(window.jspdf.jsPDF);
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload=()=>res(window.jspdf.jsPDF);
+    s.onerror=()=>rej(new Error("Couldn't load the PDF library — check your connection, or use Print to save as PDF instead."));
+    document.head.appendChild(s);
+  });
+}
+function slug(s){return String(s||"").trim().replace(/[^\w]+/g,"-").replace(/^-+|-+$/g,"");}
+function pdfFilename(){
+  const p=state.profile;
+  const docTag={script:"Script",agenda:"Agenda",notice:"Notice",minutes:"Minutes"}[state.docType]||"Script";
+  return [slug(p.orgName)||"Meeting",slug(typeLabel(state.type)),slug(p.mDate),docTag].filter(Boolean).join("-")+".pdf";
+}
+async function downloadPdf(){
+  let jsPDF;
+  try{ jsPDF=await ensureJsPDF(); }catch(e){ alert(e.message); return; }
+  const doc=new jsPDF({unit:"pt",format:"letter"});
+  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
+  const M=54, right=W-M, bottom=H-54;
+  const labelW=86, textX=M+labelW+8, textW=right-textX;
+  let y=M;
+  const ensure=sp=>{ if(y+sp>bottom){ doc.addPage(); y=M; } };
+  const clean=t=>String(t||"").replace(/«([^»]*)»/g,(m,a)=>a||"…");
+
+  const p=state.profile;
+  const {kindLabel,contLine,metaBits,docTitle,lines}=buildDoc();
+  doc.setFont("times","bold"); doc.setFontSize(20); doc.setTextColor(28,26,20);
+  doc.text(p.orgName||"Your Organization", W/2, y+8, {align:"center"}); y+=28;
+  doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(150,110,40);
+  doc.text(kindLabel.toUpperCase(), W/2, y, {align:"center"}); y+=14;
+  const meta=[contLine,metaBits].filter(Boolean).join("  ·  ");
+  if(meta){ doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(90,90,90);
+    doc.text(meta, W/2, y, {align:"center"}); y+=14; }
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(120,120,120);
+  doc.text(docTitle.toUpperCase(), W/2, y, {align:"center"}); y+=8;
+  doc.setDrawColor(168,124,42); doc.setLineWidth(1.2); doc.line(M,y,right,y); y+=20;
+
+  function drawHeading(num,title){
+    ensure(64);
+    doc.setFont("times","bold"); doc.setFontSize(13); doc.setTextColor(168,124,42);
+    const nTxt=num?num+". ":""; doc.text(nTxt,M,y+2);
+    const nW=doc.getTextWidth(nTxt);
+    doc.setTextColor(28,26,20); doc.text(title,M+nW,y+2);
+    y+=8; doc.setDrawColor(225,220,200); doc.setLineWidth(0.6); doc.line(M,y,right,y); y+=14;
+  }
+  function drawSitting(label,sub){
+    ensure(56);
+    doc.setFillColor(22,36,61); doc.rect(M,y,right-M,28,"F");
+    doc.setFont("times","bold"); doc.setFontSize(13); doc.setTextColor(242,245,250);
+    doc.text(label||"Next Sitting", W/2, y+(sub?12:18), {align:"center"});
+    if(sub){ doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(180,195,215);
+      doc.text(sub.toUpperCase(), W/2, y+22, {align:"center"}); }
+    y+=42; doc.setTextColor(0,0,0);
+  }
+  function drawLine(l){
+    const txt=clean(l.text);
+    if(l.type==="cue"){
+      doc.setFont("times","normal"); doc.setFontSize(11.5);
+      const ls=doc.splitTextToSize(txt,textW); ensure(ls.length*15+5);
+      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(44,62,92);
+      doc.text((l.who||"").toUpperCase(), M+labelW, y, {align:"right"});
+      let firstX=textX;
+      if(l.rap){ doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(168,124,42);
+        doc.text("RAP",textX,y); firstX=textX+doc.getTextWidth("RAP")+5; }
+      doc.setFont("times","normal"); doc.setFontSize(11.5); doc.setTextColor(33,29,21);
+      ls.forEach((ln,i)=>doc.text(ln, i===0?firstX:textX, y+i*15)); y+=ls.length*15+5;
+    }else if(l.type==="direction"){
+      doc.setFont("times","italic"); doc.setFontSize(10.5); doc.setTextColor(124,115,97);
+      const ls=doc.splitTextToSize(txt,textW); ensure(ls.length*13+4);
+      ls.forEach((ln,i)=>doc.text(ln,textX,y+i*13)); y+=ls.length*13+5;
+    }else if(l.type==="note"){
+      doc.setFont("helvetica","italic"); doc.setFontSize(8.8); doc.setTextColor(110,100,84);
+      const ls=doc.splitTextToSize(txt,textW); ensure(ls.length*12+4);
+      ls.forEach((ln,i)=>doc.text(ln,textX,y+i*12)); y+=ls.length*12+6;
+    }else if(l.type==="para"){
+      doc.setFont("times","normal"); doc.setFontSize(11.5); doc.setTextColor(35,30,22);
+      const ls=doc.splitTextToSize(txt,right-M); ensure(ls.length*15+6);
+      ls.forEach((ln,i)=>doc.text(ln,M,y+i*15)); y+=ls.length*15+8;
+    }else if(l.type==="bullet"){
+      doc.setFont("times","normal"); doc.setFontSize(11); doc.setTextColor(35,30,22);
+      const bx=M+18, bw=right-bx;
+      const ls=doc.splitTextToSize(txt,bw); ensure(ls.length*14+4);
+      doc.setTextColor(168,124,42); doc.text("•",M+6,y);
+      doc.setTextColor(35,30,22);
+      ls.forEach((ln,i)=>doc.text(ln,bx,y+i*14)); y+=ls.length*14+4;
+    }
+  }
+
+  if(!state.agenda.length){
+    doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(120,120,120);
+    doc.text("No agenda items.", M, y);
+  }else{
+    lines.forEach(l=>{
+      if(l.type==="sitting") drawSitting(l.label,l.sub);
+      else if(l.type==="heading") drawHeading(l.num,l.title);
+      else drawLine(l);
+    });
+  }
+
+  const pages=doc.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(150,145,130);
+    doc.text(`Page ${i} of ${pages}`, W/2, H-30, {align:"center"});
+    if(i===pages){
+      doc.setFontSize(7.5); doc.setTextColor(165,160,145);
+      doc.text("Phrasing follows Robert's Rules of Order Newly Revised (12th ed.) · A presiding aid; the assembly's rules govern in case of conflict.", W/2, H-18, {align:"center"});
+    }
+  }
+  doc.save(pdfFilename());
+}
+
+/* ---------------- Script generation (RONR 12th ed.) ---------------- */
+function addr(){return state.profile.chairAddress||"Madam President";}
+const L={
+  head:t=>({type:"heading",text:t}),
+  dir:t=>({type:"direction",text:t}),
+  cue:(who,text)=>({type:"cue",who,text}),
+  rap:(who,text)=>({type:"cue",who,text,rap:true}),
+  note:t=>({type:"note",text:t})
+};
+
+function motionBlock(motionText,noun="motion"){
+  const m=motionText && motionText.trim()? motionText.trim() : "…";
+  const out=[];
+  out.push(L.dir("A member rises and addresses the chair."));
+  out.push(L.cue("Member",`${addr()}.`));
+  out.push(L.cue("Chair","The chair recognizes the member."));
+  out.push(L.cue("Member", noun==="resolution"? `I move the adoption of the following resolution: «${m}»` : `I move that «${m}»`));
+  out.push(L.dir("Another member seconds the motion."));
+  out.push(L.cue("Member","Second."));
+  out.push(L.cue("Chair", noun==="resolution"
+    ? `It is moved and seconded to adopt the resolution «${m}» Is there any debate?`
+    : `It is moved and seconded that «${m}» Is there any debate?`));
+  out.push(L.note("Recognize members in debate, alternating between those for and against. When debate has ended:"));
+  out.push(L.cue("Chair",`Are you ready for the question? The question is on the adoption of the ${noun} «${m}»`));
+  out.push(L.cue("Chair","As many as are in favor, say aye. … Those opposed, say no."));
+  out.push(L.note("Announce the result and state its effect:"));
+  out.push(L.cue("Chair","The ayes have it, and the motion is adopted —"));
+  out.push(L.dir("— or, if the noes prevail —"));
+  out.push(L.cue("Chair","The noes have it, and the motion is lost."));
+  return out;
+}
+
+function recBlock(rec,fromCommittee){
+  const m=rec.trim(); const out=[];
+  if(fromCommittee){
+    out.push(L.cue("Reporting member",`By direction of the committee, I move that «${m}»`));
+    out.push(L.note("A motion made by direction of a committee of more than one member requires no second."));
+    out.push(L.cue("Chair",`It is moved by direction of the committee that «${m}» Is there any debate?`));
+  }else{
+    out.push(L.note("A recommendation in an individual's report is not pending until moved. The reporting officer or a member moves its adoption:"));
+    out.push(L.cue("Member",`I move that «${m}»`));
+    out.push(L.cue("Member","Second."));
+    out.push(L.cue("Chair",`It is moved and seconded that «${m}» Is there any debate?`));
+  }
+  out.push(L.note("Proceed through debate, then put the question:"));
+  out.push(L.cue("Chair","As many as are in favor, say aye. … Those opposed, say no."));
+  out.push(L.cue("Chair","The ayes have it, and the motion is adopted —"));
+  out.push(L.dir("— or, if the noes prevail, the motion is lost."));
+  return out;
+}
+
+function itemLines(it){
+  const a=addr(); const out=[];
+  switch(it.kind){
+    case "call_to_order":
+      out.push(L.rap("Chair","The meeting will come to order.")); break;
+    case "mass_call":
+      out.push(L.dir("The person calling the meeting steps to the front and raps for order."));
+      out.push(L.rap("Caller","The meeting will come to order. The first business is to elect a chairman of this meeting."));
+      break;
+    case "opening":
+      if(it.pledge){ out.push(L.cue("Chair","Please rise and join in the Pledge of Allegiance.")); }
+      if(it.invocation){ out.push(L.cue("Chair", it.invocationBy? `${it.invocationBy} will lead us in the invocation.` : "We will be led in the invocation.")); }
+      if(!it.pledge&&!it.invocation){ out.push(L.note("No ceremonies selected.")); }
+      break;
+    case "roll_call":{
+      const m=it.method||"chair_silent";
+      if(m==="roll"){
+        out.push(L.cue("Chair","The Secretary will call the roll."));
+        out.push(L.dir("The Secretary calls the roll and reports the count."));
+        out.push(L.note("Quorum is as fixed in the bylaws. If a quorum is present, proceed. If not, the only business in order is to obtain a quorum, recess, or adjourn."));
+      }else if(m==="registration"){
+        out.push(L.note("The chair ascertains from the registration count that a quorum is present, then proceeds. Nothing need be said aloud."));
+      }else if(m==="announce"){
+        out.push(L.cue("Chair","A quorum is present; the meeting will proceed to business."));
+        out.push(L.note("RONR does not require this announcement — include it only if your rules or customs do."));
+      }else{
+        out.push(L.note("Checkpoint: the chair has satisfied itself that a quorum is present. RONR requires no spoken declaration; nothing is said here."));
+      }
+      break;
+    }
+    case "minutes":{
+      const when=it.priorDate? `the meeting of «${it.priorDate}»` : "the previous meeting";
+      if(it.mode==="committee"){
+        out.push(L.cue("Chair","The reading and approval of the minutes is referred to the Committee on Minutes, as the assembly has authorized."));
+        out.push(L.note("Used chiefly for the final sitting of a convention, whose minutes the body cannot approve itself before adjourning sine die. Minutes of earlier sittings are read and approved at the next sitting."));
+        break;
+      }
+      if(it.mode==="read"){
+        out.push(L.cue("Chair",`The Secretary will read the minutes of ${when}.`));
+        out.push(L.dir("The Secretary reads the minutes."));
+      }else{
+        out.push(L.cue("Chair",`The minutes of ${when} have been distributed.`));
+      }
+      out.push(L.cue("Chair","Are there any corrections to the minutes?"));
+      out.push(L.note("Handle any corrections by unanimous consent, then:"));
+      out.push(L.cue("Chair",`There being no${it.mode==="read"?" further":""} corrections, the minutes are approved as ${it.mode==="read"?"read":"distributed"}.`));
+      break;
+    }
+    case "officer_reports":
+      it.reports.forEach(r=>{
+        const who=r.reporter? `${r.officer}, ${r.reporter}` : `the ${r.officer}`;
+        out.push(L.cue("Chair",`May we have the report of ${who}?`));
+        out.push(L.dir("The report is given."));
+        if(/treasur/i.test(r.officer||"")){
+          out.push(L.cue("Chair","Thank you. The report will be placed on file for audit."));
+          out.push(L.note("A treasurer's report is not adopted; it is received and filed for audit."));
+        }else if(r.action==="questions"){
+          out.push(L.cue("Chair","Are there any questions on the report? … Thank you. The report is received and placed on file."));
+        }else{
+          out.push(L.cue("Chair","Thank you. The report is received and placed on file."));
+        }
+        if(r.recommendation && r.recommendation.trim()) recBlock(r.recommendation,false).forEach(l=>out.push(l));
+      });
+      break;
+    case "committee_reports":
+      it.reports.forEach(r=>{
+        const who=r.reporter? `${r.committee} Committee, ${r.reporter}` : `the ${r.committee} Committee`;
+        out.push(L.cue("Chair",`May we have the report of ${who}?`));
+        out.push(L.dir("The reporting member gives the report."));
+        if(r.recommendation && r.recommendation.trim()){
+          recBlock(r.recommendation,true).forEach(l=>out.push(l));
+        }else{
+          out.push(L.cue("Chair","Thank you. The report is received and placed on file."));
+        }
+      });
+      break;
+    case "special_order":{
+      const so=it.items.filter(s=>s.text&&s.text.trim());
+      if(so.length){
+        so.forEach(s=>{
+          out.push(L.cue("Chair",`The next business in order is the special order for «${s.text}».`));
+          out.push(L.note("Take up the special order; handle any motion with the main-motion sequence."));
+        });
+      }else{
+        out.push(L.note("Take up any special orders in the order set. If there are none, this heading is passed over."));
+      }
+      break;
+    }
+    case "called_business":{
+      out.push(L.note("A special meeting may transact only the business named in the call."));
+      out.push(L.cue("Chair","The Secretary will read the call of this meeting."));
+      const ci=it.items.filter(s=>s.text&&s.text.trim());
+      if(ci.length){
+        ci.forEach((s,i)=>{ out.push(L.note(`Item ${i+1} from the call — the chair states the question:`)); motionBlock(s.text).forEach(l=>out.push(l)); });
+      }else{
+        out.push(L.note("List each item named in the call; each is taken up and handled as a main motion."));
+      }
+      break;
+    }
+    case "unfinished_business":{
+      const ui=it.items.filter(s=>s.text&&s.text.trim());
+      if(ui.length){
+        out.push(L.cue("Chair","We will now take up unfinished business and general orders."));
+        ui.forEach((s,i)=>{
+          out.push(L.note(`Item ${i+1} — the chair states the question:`));
+          motionBlock(s.text).forEach(l=>out.push(l));
+        });
+      }else{
+        out.push(L.note("The chair takes up, in order, any business postponed from the previous meeting and any general orders, stating each by name. RONR: it is improper to ask \u201cIs there any unfinished business?\u201d \u2014 the chair is presumed to know what is pending. If there is none, this heading is passed over in silence."));
+      }
+      break;
+    }
+    case "new_business":{
+      out.push(L.cue("Chair","Is there any new business?"));
+      const ni=it.items.filter(s=>s.text&&s.text.trim());
+      if(ni.length){
+        ni.forEach(s=>motionBlock(s.text).forEach(l=>out.push(l)));
+        out.push(L.cue("Chair","Is there any further new business?"));
+      }else{
+        out.push(L.note("If a member offers a motion, handle it with the main-motion sequence: state the question, open debate, put the question, announce the result."));
+      }
+      break;
+    }
+    case "resolutions":{
+      const ri=it.items.filter(s=>s.text&&s.text.trim());
+      if(ri.length){
+        ri.forEach(s=>motionBlock(s.text,"resolution").forEach(l=>out.push(l)));
+      }else{
+        out.push(L.note("Each resolution is taken up in turn and handled as a main motion."));
+      }
+      break;
+    }
+    case "announcements":
+      if(it.text && it.text.trim()){
+        out.push(L.cue("Chair","The following announcements are in order:"));
+        it.text.split("\n").map(s=>s.trim()).filter(Boolean).forEach(a=>out.push(L.cue("Chair","• "+a)));
+      }else{
+        out.push(L.cue("Chair","Are there any announcements?"));
+      }
+      break;
+    case "program":
+      out.push(L.cue("Chair",`We will now proceed to the program: «${it.description||"…"}»`));
+      break;
+    case "election":
+      out.push(L.cue("Chair","The next business in order is the election of officers."));
+      it.offices.forEach(o=>{
+        if(o.nominee){
+          out.push(L.cue("Chair",`For the office of «${o.office}», the nominee is «${o.nominee}». Are there further nominations for «${o.office}»?`));
+          out.push(L.note("If no further nominations and the bylaws permit, declare elected by acclamation; otherwise proceed to ballot:"));
+          out.push(L.cue("Chair",`There being no further nominations, nominations are closed. «${o.nominee}» is elected «${o.office}».`));
+        }else{
+          out.push(L.cue("Chair",`Nominations are now open for the office of «${o.office}».`));
+          out.push(L.note("Take nominations from the floor; when they cease, close nominations and proceed to the vote."));
+        }
+      });
+      break;
+    case "credentials":
+      out.push(L.cue("Chair","The first business is the report of the Credentials Committee."));
+      out.push(L.dir("The committee reports the number of delegates registered."));
+      out.push(L.cue("Reporting member","By direction of the committee, I move that the credentials report be adopted as the official roll of voting members of this convention."));
+      out.push(L.cue("Chair","It is moved and seconded to adopt the credentials report. As many as are in favor, say aye. … Those opposed, say no. The ayes have it, and the report is adopted."));
+      break;
+    case "standing_rules":
+      out.push(L.cue("Chair","The next business is the adoption of the convention standing rules."));
+      out.push(L.note("Standing rules of a convention are adopted by a majority vote; those in the nature of rules of order require a two-thirds vote."));
+      out.push(L.cue("Chair","It is moved and seconded to adopt the standing rules as printed. As many as are in favor, say aye. … Those opposed, say no. The ayes have it, and the standing rules are adopted."));
+      break;
+    case "program_adoption":
+      out.push(L.cue("Chair","The next business is the adoption of the convention program."));
+      out.push(L.cue("Chair","It is moved and seconded to adopt the program as printed. As many as are in favor, say aye. … Those opposed, say no. The ayes have it, and the program is adopted."));
+      break;
+    case "elect_chairman":
+      out.push(L.dir("Nominations are taken for chairman of the meeting."));
+      if(it.nominee){
+        out.push(L.cue("Member",`I nominate «${it.nominee}» for chairman.`));
+        out.push(L.cue("Caller",`«${it.nominee}» is nominated. Are there further nominations? … There being none, all in favor of «${it.nominee}» as chairman, say aye. … The ayes have it; «${it.nominee}» is elected chairman.`));
+        out.push(L.dir("The elected chairman takes the chair."));
+      }else{
+        out.push(L.cue("Caller","Nominations for chairman are now in order."));
+        out.push(L.note("Take nominations, then vote. The elected chairman takes the chair."));
+      }
+      break;
+    case "elect_secretary":
+      out.push(L.cue("Chair","The next business is the election of a secretary."));
+      if(it.nominee){
+        out.push(L.cue("Member",`I nominate «${it.nominee}» for secretary.`));
+        out.push(L.cue("Chair",`«${it.nominee}» is nominated. Are there further nominations? … There being none, all in favor, say aye. … «${it.nominee}» is elected secretary.`));
+      }else{
+        out.push(L.cue("Chair","Nominations for secretary are now in order."));
+      }
+      break;
+    case "statement_purpose":
+      out.push(L.cue("Chair",`The purpose of this meeting is «${it.text||"…"}»`));
+      out.push(L.cue("Chair","The meeting is now open for business toward that purpose."));
+      break;
+    case "adjournment":
+      if(it.sineDie){
+        out.push(L.cue("Chair","Is there any further business to come before the convention?"));
+        out.push(L.rap("Chair","There being no further business, the convention is adjourned sine die."));
+      }else{
+        out.push(L.cue("Chair","Is there any further business?"));
+        out.push(L.note("If a member moves to adjourn, it is seconded and put to a vote. Otherwise:"));
+        out.push(L.rap("Chair","There being no further business, the meeting is adjourned."));
+      }
+      break;
+    case "sitting":{
+      out.push(L.rap("Chair","The convention will come to order."));
+      if(it.readMinutes){
+        out.push(L.cue("Chair","The Secretary will read the minutes of the previous sitting."));
+        out.push(L.dir("The Secretary reads the minutes."));
+        out.push(L.cue("Chair","Are there any corrections to the minutes? … There being none, the minutes are approved as read."));
+      }
+      out.push(L.note("Business resumes per the adopted program. Unfinished business and general orders carry over from the previous sitting."));
+      break;
+    }
+    case "consent_agenda":{
+      out.push(L.cue("Chair","The next business is the consent agenda."));
+      const ci=it.items.filter(s=>s.text&&s.text.trim());
+      if(ci.length){
+        out.push(L.cue("Chair","The consent agenda comprises the following:"));
+        ci.forEach(s=>out.push(L.cue("Chair","• "+s.text.trim())));
+      }
+      out.push(L.cue("Chair","Is there any item a member wishes to remove for separate consideration?"));
+      out.push(L.note("Remove any item a member requests and take it up separately, then:"));
+      out.push(L.cue("Chair","Hearing no further requests, the remaining items on the consent agenda are adopted by unanimous consent."));
+      break;
+    }
+    case "good_of_order":
+      out.push(L.cue("Chair","Is there anything for the good of the order?"));
+      out.push(L.note("Members may offer general remarks. No motions are required; recognize members in turn."));
+      break;
+    case "nominations_floor":{
+      const offs=it.offices.filter(o=>o.office&&o.office.trim());
+      if(offs.length){
+        offs.forEach(o=>{
+          out.push(L.cue("Chair",`Nominations are now open for the office of «${o.office}».`));
+          out.push(L.note("Nominations from the floor require no second."));
+          out.push(L.cue("Chair",`Are there further nominations for «${o.office}»? … There being none, nominations for «${o.office}» are closed.`));
+        });
+      }else{
+        out.push(L.cue("Chair","Nominations from the floor are now in order."));
+        out.push(L.note("Open nominations for each office; close when nominations cease."));
+      }
+      break;
+    }
+    case "installation":{
+      const who=it.installer&&it.installer.trim()?it.installer.trim():"The installing officer";
+      out.push(L.cue("Chair",`${who} will now install the newly elected officers.`));
+      const offs=it.offices.filter(o=>(o.office&&o.office.trim())||(o.name&&o.name.trim()));
+      if(offs.length){
+        out.push(L.dir("The officers come forward as their offices are called."));
+        offs.forEach(o=>out.push(L.cue("Installing officer",`${o.name||"…"}, elected «${o.office||"…"}».`)));
+      }
+      out.push(L.cue("Installing officer","Do you accept the duties of your respective offices?"));
+      out.push(L.dir("The officers respond, “I do.”"));
+      out.push(L.cue("Installing officer","Then I declare you duly installed. Congratulations."));
+      out.push(L.note("Installation is ceremonial; RONR prescribes no fixed wording — adapt to your organization's custom."));
+      break;
+    }
+    case "recess":{
+      const t=it.untilTime&&it.untilTime.trim()?it.untilTime.trim():"…";
+      if(it.mode==="adjourn_to"){
+        out.push(L.cue("Chair","Is there further business before this sitting?"));
+        out.push(L.rap("Chair",`There being none, the convention stands adjourned to «${t}».`));
+        out.push(L.note("Adjourning to a later time continues the same session — business pending now resumes at the next sitting. Only the final sitting adjourns sine die."));
+      }else{
+        out.push(L.rap("Chair",`The convention will stand in recess until «${t}».`));
+        out.push(L.note("A recess is a short intermission; the meeting and its pending business continue on reconvening."));
+      }
+      out.push(L.dir(it.label&&it.label.trim()?`Reconvening — «${it.label}».`:"Reconvening."));
+      out.push(L.rap("Chair","The convention will come to order."));
+      break;
+    }
+    default:
+      out.push(L.note("—"));
+  }
+  return out;
+}
+
+/* ---------------- Document builders ---------------- */
+function headerInfo(){
+  const p=state.profile;
+  let kindLabel=typeLabel(state.type), contLine="";
+  if(state.type==="adjourned"){
+    const pt=p.adjParentType==="special"?"Special":"Regular";
+    kindLabel="Adjourned "+pt+" Meeting";
+    contLine=p.adjParentDate&&p.adjParentDate.trim()?`Continuing the ${pt.toLowerCase()} meeting of ${p.adjParentDate.trim()}`:"";
+  }
+  const metaBits=[p.mDate,p.mTime,p.mPlace].filter(Boolean).join("  ·  ");
+  return {kindLabel,contLine,metaBits};
+}
+function chairTitle(){ return addr().replace(/^(Madam|Mr\.)\s+/,""); }
+const sittingLine=it=>({type:"sitting",label:it.label||"Next Sitting",sub:[it.day,it.time].filter(x=>x&&x.trim()).join("  ·  ")});
+
+function buildDoc(){
+  const {kindLabel,contLine,metaBits}=headerInfo();
+  let docTitle,lines;
+  switch(state.docType){
+    case "agenda": docTitle="Agenda"; lines=buildAgendaLines(); break;
+    case "notice": docTitle=(state.type==="special"?"Call of a Special Meeting":"Notice of Meeting"); lines=buildNoticeLines(); break;
+    case "minutes": docTitle="Minutes"; lines=buildMinutesLines(); break;
+    default: docTitle="Presiding Officer's Script"; lines=buildScriptLines();
+  }
+  return {kindLabel,contLine,metaBits,docTitle,lines};
+}
+
+function buildScriptLines(){
+  const out=[]; let n=0;
+  state.agenda.forEach(it=>{
+    if(it.kind==="sitting"){ out.push(sittingLine(it)); n=0; itemLines(it).forEach(l=>out.push(l)); return; }
+    n++; out.push({type:"heading",num:n,title:KIND_TITLE[it.kind]||it.kind});
+    itemLines(it).forEach(l=>out.push(l));
+  });
+  return out;
+}
+
+function agendaSubs(it){
+  const subs=[]; const list=arr=>arr.filter(s=>s.text&&s.text.trim()).map(s=>s.text.trim());
+  switch(it.kind){
+    case "opening": if(it.pledge)subs.push("Pledge of Allegiance"); if(it.invocation)subs.push("Invocation"+(it.invocationBy?` — ${it.invocationBy}`:"")); break;
+    case "minutes": subs.push("Approval of the minutes"+(it.priorDate?` of ${it.priorDate}`:"")); break;
+    case "officer_reports": it.reports.forEach(r=>subs.push(r.officer+(r.reporter?` — ${r.reporter}`:""))); break;
+    case "committee_reports": it.reports.forEach(r=>subs.push(`${r.committee} Committee`+(r.reporter?` — ${r.reporter}`:""))); break;
+    case "special_order": case "unfinished_business": case "new_business": case "called_business": case "consent_agenda": case "resolutions": list(it.items).forEach(t=>subs.push(t)); break;
+    case "election": it.offices.forEach(o=>{ if(o.office&&o.office.trim())subs.push(o.office+(o.nominee?` — ${o.nominee}`:"")); }); break;
+    case "nominations_floor": it.offices.forEach(o=>{ if(o.office&&o.office.trim())subs.push(o.office); }); break;
+    case "installation": it.offices.forEach(o=>{ if((o.office&&o.office.trim())||(o.name&&o.name.trim()))subs.push((o.name||"")+(o.office?` — ${o.office}`:"")); }); break;
+    case "program": if(it.description&&it.description.trim())subs.push(it.description.trim()); break;
+    case "announcements": (it.text||"").split("\n").map(s=>s.trim()).filter(Boolean).forEach(t=>subs.push(t)); break;
+  }
+  return subs;
+}
+function buildAgendaLines(){
+  const out=[]; let n=0;
+  state.agenda.forEach(it=>{
+    if(it.kind==="sitting"){ out.push(sittingLine(it)); n=0; return; }
+    if(it.kind==="recess"){ out.push({type:"heading",num:null,title:"Recess"}); return; }
+    n++; out.push({type:"heading",num:n,title:KIND_TITLE[it.kind]||it.kind});
+    agendaSubs(it).forEach(t=>out.push({type:"bullet",text:t}));
+  });
+  return out;
+}
+
+function buildNoticeLines(){
+  const p=state.profile; const out=[];
+  const date=p.mDate?` on ${p.mDate}`:"", time=p.mTime?` at ${p.mTime}`:"", place=p.mPlace?`, at ${p.mPlace}`:"";
+  out.push({type:"para",text:`Notice is hereby given that a ${typeLabel(state.type).toLowerCase()} of ${p.orgName||"the organization"} will be held${date}${time}${place}.`});
+  if(state.type==="adjourned"){ const {contLine}=headerInfo(); if(contLine)out.push({type:"para",text:contLine+", as ordered at that meeting."}); }
+  const called=state.agenda.find(i=>i.kind==="called_business");
+  const calledItems=called?called.items.filter(s=>s.text&&s.text.trim()):[];
+  if(state.type==="special"||calledItems.length){
+    out.push({type:"para",text:"The following business is to be transacted:"});
+    if(calledItems.length) calledItems.forEach(s=>out.push({type:"bullet",text:s.text.trim()}));
+    else out.push({type:"bullet",text:"[State the purpose of the meeting.]"});
+    out.push({type:"para",text:"In accordance with the bylaws, only business stated in this call may be transacted at the meeting."});
+  }else{
+    out.push({type:"para",text:"Business will proceed according to the organization's standard order of business."});
+  }
+  out.push({type:"para",text:" "});
+  out.push({type:"para",text:"_____________________________"});
+  out.push({type:"para",text:"Secretary"});
+  return out;
+}
+
+function minutesSubs(it){
+  const subs=[]; const motions=arr=>arr.filter(s=>s.text&&s.text.trim()).map(s=>s.text.trim());
+  switch(it.kind){
+    case "opening": subs.push("Opening ceremonies were conducted."); break;
+    case "roll_call": subs.push("A quorum was present."); break;
+    case "minutes": subs.push(`The minutes of ${it.priorDate||"the previous meeting"} were approved ____.`); break;
+    case "officer_reports": it.reports.forEach(r=>subs.push(`${r.reporter?r.reporter+", ":""}${r.officer}, presented a report.${r.recommendation&&r.recommendation.trim()?` On motion, it was ____ that ${r.recommendation.trim()}.`:" The report was received and filed."}`)); break;
+    case "committee_reports": it.reports.forEach(r=>subs.push(`The ${r.committee} Committee${r.reporter?`, ${r.reporter},`:""} reported.${r.recommendation&&r.recommendation.trim()?` On motion of the committee, it was ____ that ${r.recommendation.trim()}.`:" The report was received and filed."}`)); break;
+    case "special_order": case "unfinished_business": case "new_business": case "called_business":{
+      const ms=motions(it.items);
+      if(ms.length) ms.forEach(t=>subs.push(`____ moved that ${t}. The motion was ____.`));
+      else subs.push("No business was transacted under this heading.");
+      break;
+    }
+    case "resolutions": motions(it.items).forEach(t=>subs.push(`The following resolution was ____: ${t}`)); break;
+    case "consent_agenda": subs.push("The consent agenda was adopted by unanimous consent."); break;
+    case "election": it.offices.forEach(o=>{ if(o.office&&o.office.trim())subs.push(`${o.office}: ${o.nominee||"____"} was elected.`); }); break;
+    case "nominations_floor": subs.push("Nominations were made from the floor."); break;
+    case "installation": subs.push("The newly elected officers were installed."); break;
+    case "announcements": subs.push("Announcements were made."); break;
+    case "program": subs.push(`The program was presented${it.description&&it.description.trim()?`: ${it.description.trim()}`:""}.`); break;
+    case "credentials": subs.push("The Credentials Committee reported; the report was adopted."); break;
+    case "standing_rules": subs.push("The convention standing rules were adopted."); break;
+    case "program_adoption": subs.push("The program was adopted."); break;
+    case "good_of_order": subs.push("Remarks were offered for the good of the order."); break;
+    case "recess": subs.push(`The meeting recessed${it.untilTime?` until ${it.untilTime}`:""} and reconvened.`); break;
+    case "special_order": subs.push("The special order was taken up."); break;
+    default: subs.push("____");
+  }
+  return subs;
+}
+function buildMinutesLines(){
+  const p=state.profile; const out=[]; let n=0;
+  const kind=typeLabel(state.type).toLowerCase();
+  out.push({type:"para",text:`The ${kind} of ${p.orgName||"____"} was held on ${p.mDate||"____"} at ${p.mTime||"____"}, at ${p.mPlace||"____"}. The ${chairTitle()} presided, and the Secretary was present. A quorum was present.`});
+  if(state.type==="adjourned"){ const {contLine}=headerInfo(); if(contLine)out.push({type:"para",text:contLine+"."}); }
+  state.agenda.forEach(it=>{
+    if(it.kind==="sitting"){ out.push(sittingLine(it)); n=0; return; }
+    if(it.kind==="call_to_order"||it.kind==="mass_call") return;
+    if(it.kind==="adjournment"){ n++; out.push({type:"heading",num:n,title:"Adjournment"}); out.push({type:"para",text:"There being no further business, the meeting adjourned at ____."}); return; }
+    n++; out.push({type:"heading",num:n,title:KIND_TITLE[it.kind]||it.kind});
+    minutesSubs(it).forEach(t=>out.push({type:"para",text:t}));
+  });
+  out.push({type:"para",text:" "});
+  out.push({type:"para",text:"Respectfully submitted,"});
+  out.push({type:"para",text:"_____________________________, Secretary"});
+  return out;
+}
+
+/* ---------------- Sheet render ---------------- */
+function renderSheet(){
+  const sheet=$("#sheet");
+  const {kindLabel,contLine,metaBits,docTitle,lines}=buildDoc();
+  const metaLine=[contLine,metaBits].filter(Boolean).join("  ·  ");
+  let html=`<div class="sheet-head">
+      <div class="org">${esc(state.profile.orgName||"Your Organization")}</div>
+      <div class="kind">${esc(kindLabel)}</div>
+      ${metaLine?`<div class="meta">${esc(metaLine)}</div>`:""}
+    </div>
+    <div class="sheet-title">${esc(docTitle)}</div>`;
+
+  if(!state.agenda.length){
+    html+=`<div class="empty">Your document will appear here as you build the agenda.</div>`;
+    sheet.innerHTML=html; return;
+  }
+
+  let open=false;
+  lines.forEach(l=>{
+    if(l.type==="sitting"){
+      if(open){ html+=`</div>`; open=false; }
+      html+=`<div class="sitting"><div class="sitting-h">${esc(l.label||"Next Sitting")}</div>${l.sub?`<div class="sitting-m">${esc(l.sub)}</div>`:""}</div>`;
+      return;
+    }
+    if(l.type==="heading"){
+      if(open) html+=`</div>`;
+      html+=`<div class="ai"><div class="ai-h">${l.num?`<span class="n">${l.num}.</span>`:""}<span class="t">${esc(l.title)}</span></div>`;
+      open=true; return;
+    }
+    if(!open){ html+=`<div class="ai">`; open=true; }
+    html+=renderLine(l);
+  });
+  if(open) html+=`</div>`;
+
+  html+=`<div class="sheet-foot">Generated by Motion Carried · Presiding Script Engine · Phrasing follows Robert's Rules of Order Newly Revised (12th ed.)<br>A presiding aid; the assembly's bylaws and adopted rules govern in case of conflict.</div>`;
+
+  sheet.innerHTML=html;
+}
+
+function renderLine(l){
+  if(l.type==="direction") return `<div class="line direction">${esc(l.text)}</div>`;
+  if(l.type==="note") return `<div class="line note"><span class="said">${esc(l.text)}</span></div>`;
+  if(l.type==="para") return `<div class="para">${varHL(l.text)}</div>`;
+  if(l.type==="bullet") return `<div class="bullet">${varHL(l.text)}</div>`;
+  const who=l.who||"";
+  return `<div class="line cue"><span class="who">${esc(who)}</span><span class="said">${l.rap?'<span class="rap">RAP</span>':''}${varHL(l.text)}</span></div>`;
+}
+/* highlight «variable» spans filled from the agenda */
+function varHL(t){
+  return esc(t).replace(/«([^»]*)»/g,(m,inner)=>`<span class="var">${inner||"…"}</span>`);
+}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ---------------- Boot ---------------- */
+function renderAll(){renderAgenda();renderSheet();}
+$("#orgName").value="";
+updateTypeUI();
+buildSkeleton();
+renderAll();
+</script>
+</body>
+</html>
