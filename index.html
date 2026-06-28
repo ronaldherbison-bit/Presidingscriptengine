@@ -558,6 +558,7 @@ function renderItemBody(it){
     case "special_order":{
       const rows=it.items.map((s,i)=>`<div class="subitem">
         <textarea data-sub="${i}" placeholder="consideration of the proposed bylaw amendment">${esc(s.text)}</textarea>
+        <label class="v23" title="Requires a two-thirds vote — scripts a rising vote"><input type="checkbox" data-sub23="${i}" ${s.two_thirds?"checked":""}>⅔</label>
         <button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
       return `<div class="subitems">${rows}</div><button class="mini" data-subadd="1">+ Add special order</button>
         <p class="hint" style="margin-top:8px">Special orders are taken up in the order set. Leave empty if there are none.</p>`;
@@ -911,6 +912,16 @@ function motionBlock(motionText,noun="motion",twoThirds=false){
     ? `It is moved and seconded to adopt the resolution «${m}» Is there any debate?`
     : `It is moved and seconded that «${m}» Is there any debate?`));
   out.push(L.note("Recognize members in debate, alternating between those for and against. When debate has ended:"));
+  voteLines(m,noun,twoThirds).forEach(l=>out.push(l));
+  return out;
+}
+
+/* Put the question and announce the result. Voice form by default; rising
+   form with the two-thirds announcement when twoThirds is true. The wording
+   for putting and announcing a vote lives only here. */
+function voteLines(motionText,noun="motion",twoThirds=false){
+  const m=motionText && motionText.trim()? motionText.trim() : "…";
+  const out=[];
   out.push(L.cue("Chair",`Are you ready for the question? The question is on the adoption of the ${noun} «${m}»`));
   if(twoThirds){
     out.push(L.note("This question requires a two-thirds vote; it is taken by rising."));
@@ -1029,7 +1040,7 @@ function itemLines(it){
       if(so.length){
         so.forEach(s=>{
           out.push(L.cue("Chair",`The next business in order is the special order for «${s.text}».`));
-          out.push(L.note("Take up the special order; handle any motion with the main-motion sequence."));
+          voteLines(s.text,"motion",s.two_thirds).forEach(l=>out.push(l));
         });
       }else{
         out.push(L.note("Take up any special orders in the order set. If there are none, this heading is passed over."));
@@ -1366,7 +1377,7 @@ function officerScript(r){
   if(r.recommendation && r.recommendation.trim()){
     lines.push({type:"heading",title:"Your Recommendation"});
     lines.push(L.note("When you finish reporting, you may move your recommendation. Because it is your own motion as an individual, it requires a second from another member."));
-    lines.push(L.cue(r.officer||"You", `I move that «${r.recommendation.trim()}».`));
+    lines.push(L.cue(r.reporter&&r.reporter.trim()? r.reporter.trim() : (r.officer||"Officer"), `I move that «${r.recommendation.trim()}».`));
     lines.push(L.dir("Be ready to speak first to your motion if the chair opens debate."));
   }else{
     lines.push(L.note("After you finish, the chair will receive your report and place it on file. No motion is needed unless you are offering a recommendation."));
@@ -1385,7 +1396,7 @@ function committeeScript(r){
   if(r.recommendation && r.recommendation.trim()){
     lines.push({type:"heading",title:"The Committee's Motion"});
     lines.push(L.note("State that the motion comes by direction of the committee. A motion made on behalf of a committee of more than one member needs no second."));
-    lines.push(L.cue("Reporter", `By direction of the ${r.committee} Committee, I move «${r.recommendation.trim()}».`));
+    lines.push(L.cue(r.reporter&&r.reporter.trim()? r.reporter.trim() : "Reporting member", `By direction of the ${r.committee} Committee, I move «${r.recommendation.trim()}».`));
     lines.push(L.dir("Be ready to speak first to the motion when the chair opens debate."));
   }else{
     lines.push(L.note("With no recommendation, the chair will receive the report and place it on file. No motion is required."));
@@ -1478,7 +1489,6 @@ function minutesSubs(it){
     case "program_adoption": subs.push("The program was adopted."); break;
     case "good_of_order": subs.push("Remarks were offered for the good of the order."); break;
     case "recess": subs.push(`The meeting recessed${it.untilTime?` until ${it.untilTime}`:""} and reconvened.`); break;
-    case "special_order": subs.push("The special order was taken up."); break;
     default: subs.push("____");
   }
   return subs;
