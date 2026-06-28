@@ -311,6 +311,7 @@
     <select id="partSel"></select>
   </div>
   <button class="btn btn-ghost" id="loadBtn">Reset to standard order</button>
+  <button class="btn btn-ghost" id="startOverBtn">Start over</button>
   <button class="btn btn-ghost" id="printBtn">Print</button>
   <button class="btn btn-print" id="pdfBtn">Download PDF</button>
 </div>
@@ -425,6 +426,47 @@ const state = {
 };
 let uid = 1;
 const nid = () => "i"+(uid++);
+
+/* ---------------- Persistence (localStorage, this device only) ---------------- */
+const SAVE_KEY="pse_state_v1";
+let saveTimer=null;
+function saveState(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(_){ /* storage unavailable or over quota — fail silently */ }
+}
+function scheduleSave(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveState,300);
+}
+function restoreState(){
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(_){ return false; }
+  if(!saved || typeof saved!=="object" || !Array.isArray(saved.agenda)) return false;
+  // Merge profile so keys the saved copy lacks keep their defaults (forward-compatible).
+  if(saved.profile && typeof saved.profile==="object") Object.assign(state.profile, saved.profile);
+  const rest=Object.assign({},saved); delete rest.profile;
+  Object.assign(state, rest);
+  // Keep the id counter past the highest restored item id so new items stay unique.
+  let max=0;
+  state.agenda.forEach(it=>{ const n=parseInt(String(it&&it.id).replace(/\D/g,""),10); if(n>max)max=n; });
+  if(uid<=max) uid=max+1;
+  return true;
+}
+function resetState(){
+  state.authority="RONR"; state.type="regular"; state.docType="script"; state.scriptPart="chair";
+  state.profile={ orgName:"", chairAddress:"Madam President", mDate:"", mTime:"", mPlace:"", adjParentType:"regular", adjParentDate:"" };
+  state.agenda=[]; uid=1;
+}
+function syncFormFromState(){
+  const p=state.profile;
+  $("#orgName").value=p.orgName||"";
+  $("#chairAddress").value=p.chairAddress||"Madam President";
+  $("#mDate").value=p.mDate||""; $("#mTime").value=p.mTime||""; $("#mPlace").value=p.mPlace||"";
+  $("#adjParentType").value=p.adjParentType||"regular";
+  $("#adjParentDate").value=p.adjParentDate||"";
+  $("#typeSel").value=state.type;
+  $("#docSel").value=state.docType;
+  const a=$("#authoritySel"); if(a&&state.authority) a.value=state.authority;
+}
 
 /* ---------------- Item factory ---------------- */
 function makeItem(kind){
@@ -767,6 +809,11 @@ $("#typeSel").addEventListener("change",e=>{ state.type=e.target.value; updateTy
 $("#docSel").addEventListener("change",e=>{ state.docType=e.target.value; refreshPartUI(); renderSheet(); });
 $("#partSel").addEventListener("change",e=>{ state.scriptPart=e.target.value; renderSheet(); });
 $("#loadBtn").addEventListener("click",loadSkeleton);
+$("#startOverBtn").addEventListener("click",()=>{
+  if(!confirm("Clear this agenda and start over?")) return;
+  try{ localStorage.removeItem(SAVE_KEY); }catch(_){}
+  resetState(); buildSkeleton(); syncFormFromState(); updateTypeUI(); renderAll();
+});
 $("#printBtn").addEventListener("click",()=>window.print());
 $("#pdfBtn").addEventListener("click",downloadPdf);
 
@@ -1514,6 +1561,7 @@ function buildMinutesLines(){
 /* ---------------- Sheet render ---------------- */
 function renderSheet(){
   const sheet=$("#sheet");
+  scheduleSave();
   refreshPartUI();
   const {kindLabel,contLine,metaBits,docTitle,lines}=buildDoc();
   const metaLine=[contLine,metaBits].filter(Boolean).join("  ·  ");
@@ -1567,10 +1615,16 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
 
 /* ---------------- Boot ---------------- */
 function renderAll(){renderAgenda();renderSheet();}
-$("#orgName").value="";
-updateTypeUI();
-buildSkeleton();
-renderAll();
+if(restoreState()){
+  syncFormFromState();
+  updateTypeUI();
+  renderAll();
+}else{
+  $("#orgName").value="";
+  updateTypeUI();
+  buildSkeleton();
+  renderAll();
+}
 </script>
 </body>
 </html>
