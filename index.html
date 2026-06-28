@@ -355,6 +355,10 @@
       <div class="agenda-head">
         <h2 style="margin:0">Agenda</h2>
       </div>
+      <div class="add-row" id="addRowTop">
+        <select id="addSelectTop"><option value="">+ Add agenda item…</option></select>
+        <button type="button" class="add-plus" id="addPlusTop" title="Add agenda item" aria-label="Add agenda item">+</button>
+      </div>
       <div class="agenda-list" id="agendaList"></div>
       <div class="add-row">
         <select id="addSelect">
@@ -556,6 +560,16 @@ const agendaList=$("#agendaList");
 
 function field(label,inputHTML){return `<div class="field"><label>${label}</label>${inputHTML}</div>`;}
 
+/* Swap two entries of an array in place (used to reorder rows within a section). */
+function moveInArray(arr,i,d){ const j=i+d; if(j<0||j>=arr.length)return; [arr[i],arr[j]]=[arr[j],arr[i]]; }
+/* Up/down reorder buttons for a row inside a section. Rendered only when there is
+   more than one row; the value encodes "index:direction". */
+function subMoves(attr,i,len){
+  if(len<2) return "";
+  return `<button class="icon-btn mv" data-${attr}="${i}:-1" ${i===0?"disabled":""} title="Move up">↑</button>`+
+         `<button class="icon-btn mv" data-${attr}="${i}:1" ${i===len-1?"disabled":""} title="Move down">↓</button>`;
+}
+
 function renderItemBody(it){
   const k=it.kind;
   const ti=(name,val,ph="")=>`<input type="text" data-f="${name}" value="${esc(val||"")}" placeholder="${ph}">`;
@@ -579,7 +593,7 @@ function renderItemBody(it){
       const rows=it.reports.map((r,i)=>`<div style="border:1px solid var(--rule);border-radius:7px;padding:9px 9px 4px;background:#fff;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
           <strong style="font-size:12px;color:var(--ink)">${esc(r.officer||"Officer")}</strong>
-          <button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></div>
+          <span class="tools" style="display:inline-flex;gap:2px">${subMoves("repmv",i,it.reports.length)}<button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></span></div>
         <div class="row2">${field("Officer",`<input type="text" data-rep="${i}" data-rk="officer" value="${esc(r.officer)}" placeholder="Treasurer">`)}${field("Reporter",`<input type="text" data-rep="${i}" data-rk="reporter" value="${esc(r.reporter)}" placeholder="optional">`)}</div>
         ${field("Disposition",`<select data-rep="${i}" data-rk="action"><option value="file" ${r.action==="file"?"selected":""}>Receive & file</option><option value="questions" ${r.action==="questions"?"selected":""}>Invite questions, then file</option></select>`)}
         ${field("Recommendation, if any — scripted as a motion",`<textarea data-rep="${i}" data-rk="recommendation" placeholder="e.g., that the recommended dues increase be adopted">${esc(r.recommendation)}</textarea>`)}
@@ -590,7 +604,7 @@ function renderItemBody(it){
       const rows=it.reports.map((r,i)=>`<div style="border:1px solid var(--rule);border-radius:7px;padding:9px 9px 4px;background:#fff;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
           <strong style="font-size:12px;color:var(--ink)">${esc(r.committee||"Committee")} Committee</strong>
-          <button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></div>
+          <span class="tools" style="display:inline-flex;gap:2px">${subMoves("repmv",i,it.reports.length)}<button class="icon-btn del" data-repdel="${i}" title="Remove report">✕</button></span></div>
         <div class="row2">${field("Committee",`<input type="text" data-rep="${i}" data-rk="committee" value="${esc(r.committee)}" placeholder="Finance">`)}${field("Reporter",`<input type="text" data-rep="${i}" data-rk="reporter" value="${esc(r.reporter)}" placeholder="optional">`)}</div>
         ${field("Recommendation, if any — scripted as a motion",`<textarea data-rep="${i}" data-rk="recommendation" placeholder="e.g., that the association adopt the proposed budget">${esc(r.recommendation)}</textarea>`)}
       </div>`).join("");
@@ -601,7 +615,7 @@ function renderItemBody(it){
       const rows=it.items.map((s,i)=>`<div class="subitem">
         <textarea data-sub="${i}" placeholder="consideration of the proposed bylaw amendment">${esc(s.text)}</textarea>
         <label class="v23" title="Requires a two-thirds vote — scripts a rising vote"><input type="checkbox" data-sub23="${i}" ${s.two_thirds?"checked":""}>⅔</label>
-        <button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
+        ${subMoves("submv",i,it.items.length)}<button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
       return `<div class="subitems">${rows}</div><button class="mini" data-subadd="1">+ Add special order</button>
         <p class="hint" style="margin-top:8px">Special orders are taken up in the order set. Leave empty if there are none.</p>`;
     }
@@ -626,7 +640,7 @@ function renderItemBody(it){
       const rows=it.items.map((s,i)=>`<div class="subitem">
         <textarea data-sub="${i}" placeholder="${ph}">${esc(s.text)}</textarea>
         ${votes?`<label class="v23" title="Requires a two-thirds vote — scripts a rising vote"><input type="checkbox" data-sub23="${i}" ${s.two_thirds?"checked":""}>⅔</label>`:""}
-        <button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
+        ${subMoves("submv",i,it.items.length)}<button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
       const tail=k==="called_business"
         ? `<p class="hint" style="margin-top:8px">A special meeting may transact only the business named in the call. Each item is scripted as a main motion.</p>`
         : `<p class="hint" style="margin-top:8px">Each entry is scripted inline with the full main-motion sequence. Leave one blank to invite ${noun}s from the floor.</p>`;
@@ -635,7 +649,7 @@ function renderItemBody(it){
     case "nominations_floor":{
       const rows=it.offices.map((o,i)=>`<div class="subitem">
         <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office (e.g., Director)" style="flex:1">
-        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+        ${subMoves("offmv",i,it.offices.length)}<button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
       return `<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add office</button>
         <p class="hint" style="margin-top:8px">Opens and closes floor nominations for each office. Leave empty for a generic call for nominations.</p>`;
     }
@@ -643,7 +657,7 @@ function renderItemBody(it){
       const rows=it.offices.map((o,i)=>`<div class="subitem">
         <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office" style="flex:1">
         <input type="text" data-off="${i}" data-k="name" value="${esc(o.name||"")}" placeholder="Officer name" style="flex:1.3">
-        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+        ${subMoves("offmv",i,it.offices.length)}<button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
       return field("Installing officer (optional)",`<input type="text" data-f="installer" value="${esc(it.installer||"")}" placeholder="The Installing Officer">`)
         +`<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add officer</button>
         <p class="hint" style="margin-top:8px">Installation is ceremonial — RONR prescribes no fixed wording; this is a usable default to adapt.</p>`;
@@ -652,7 +666,7 @@ function renderItemBody(it){
       const rows=it.offices.map((o,i)=>`<div class="subitem">
         <input type="text" data-off="${i}" data-k="office" value="${esc(o.office)}" placeholder="Office" style="flex:1">
         <input type="text" data-off="${i}" data-k="nominee" value="${esc(o.nominee)}" placeholder="Nominee (optional)" style="flex:1.3">
-        <button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
+        ${subMoves("offmv",i,it.offices.length)}<button class="icon-btn del" data-offdel="${i}" title="Remove">✕</button></div>`).join("");
       return `<div class="subitems">${rows}</div><button class="mini" data-offadd="1">+ Add office</button>`;
     }
     case "adjournment":
@@ -742,6 +756,9 @@ agendaList.addEventListener("click",e=>{
     if(!it.reports.length)it.reports.push(it.kind==="officer_reports"?{officer:"",reporter:"",action:"file",recommendation:""}:{committee:"",reporter:"",recommendation:""});
     renderAgenda(); renderSheet();
   }
+  else if(t.dataset.submv!==undefined){ const [i2,d]=t.dataset.submv.split(":").map(Number); moveInArray(it.items,i2,d); renderAgenda(); renderSheet(); }
+  else if(t.dataset.offmv!==undefined){ const [i2,d]=t.dataset.offmv.split(":").map(Number); moveInArray(it.offices,i2,d); renderAgenda(); renderSheet(); }
+  else if(t.dataset.repmv!==undefined){ const [i2,d]=t.dataset.repmv.split(":").map(Number); moveInArray(it.reports,i2,d); renderAgenda(); renderSheet(); }
 });
 
 /* drag-and-drop reordering (arrows remain for touch/keyboard) */
@@ -786,17 +803,23 @@ agendaList.addEventListener("drop",e=>{
   dragId=null; renderAll();
 });
 
-$("#addSelect").addEventListener("change",e=>{
-  if(!e.target.value)return;
-  state.agenda.push(makeItem(e.target.value));
-  e.target.value="";
-  renderAll();
-});
-$("#addPlus").addEventListener("click",()=>{
-  const sel=$("#addSelect");
-  if(typeof sel.showPicker==="function"){ try{ sel.showPicker(); return; }catch(_){} }
-  sel.focus();
-});
+/* Two add-controls — one above the list, one below — share the same options and behavior. */
+$("#addSelectTop").innerHTML=$("#addSelect").innerHTML;
+function wireAdd(selSel,btnSel){
+  $(selSel).addEventListener("change",e=>{
+    if(!e.target.value)return;
+    state.agenda.push(makeItem(e.target.value));
+    e.target.value="";
+    renderAll();
+  });
+  $(btnSel).addEventListener("click",()=>{
+    const sel=$(selSel);
+    if(typeof sel.showPicker==="function"){ try{ sel.showPicker(); return; }catch(_){} }
+    sel.focus();
+  });
+}
+wireAdd("#addSelect","#addPlus");
+wireAdd("#addSelectTop","#addPlusTop");
 
 /* profile + top controls */
 const pmap={orgName:"orgName",chairAddress:"chairAddress",mDate:"mDate",mTime:"mTime",mPlace:"mPlace",adjParentType:"adjParentType",adjParentDate:"adjParentDate"};
