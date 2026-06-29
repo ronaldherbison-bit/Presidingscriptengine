@@ -637,8 +637,10 @@ function renderItemBody(it){
       const noun=k==="resolutions"?"resolution":(k==="called_business"||k==="consent_agenda")?"item":"motion";
       const ph=k==="unfinished_business"?"the postponed motion to…":k==="resolutions"?"Resolved, that…":k==="called_business"?"an item named in the call, e.g., to approve the lease":k==="consent_agenda"?"a routine item, e.g., approval of the minutes":"to approve the annual budget of $45,000";
       const votes = k!=="consent_agenda";
+      const showMover = (k==="new_business"||k==="called_business"||k==="resolutions");
       const rows=it.items.map((s,i)=>`<div class="subitem">
         <textarea data-sub="${i}" placeholder="${ph}">${esc(s.text)}</textarea>
+        ${showMover?`<input type="text" data-submover="${i}" value="${esc(s.mover||"")}" placeholder="Mover (optional)" style="flex:0 1 130px;min-width:90px;align-self:flex-start">`:""}
         ${votes?`<label class="v23" title="Requires a two-thirds vote — scripts a rising vote"><input type="checkbox" data-sub23="${i}" ${s.two_thirds?"checked":""}>⅔</label>`:""}
         ${subMoves("submv",i,it.items.length)}<button class="icon-btn del" data-subdel="${i}" title="Remove">✕</button></div>`).join("");
       const tail=k==="called_business"
@@ -720,6 +722,8 @@ agendaList.addEventListener("input",e=>{
     it[t.dataset.f]=t.type==="checkbox"?t.checked:t.value;
   }else if(t.dataset.sub!==undefined){
     it.items[+t.dataset.sub].text=t.value;
+  }else if(t.dataset.submover!==undefined){
+    it.items[+t.dataset.submover].mover=t.value;
   }else if(t.dataset.off!==undefined){
     it.offices[+t.dataset.off][t.dataset.k]=t.value;
   }else if(t.dataset.rep!==undefined){
@@ -1010,6 +1014,19 @@ function voteLines(motionText,noun="motion",twoThirds=false){
   return out;
 }
 
+/* A question already before the assembly (carried over from a prior meeting):
+   the chair states it and opens debate — no member rises, moves, or seconds —
+   then the vote is put. Shared by the special-order and unfinished-business
+   headings so the two read identically. */
+function pendingQuestion(stateLine,m,twoThirds=false){
+  const out=[];
+  out.push(L.cue("Chair",stateLine));
+  out.push(L.cue("Chair","Is there any debate?"));
+  out.push(L.note("Recognize members in debate, alternating between those for and against. When debate has ended:"));
+  voteLines(m,"motion",twoThirds).forEach(l=>out.push(l));
+  return out;
+}
+
 function recBlock(rec,fromCommittee){
   const m=rec.trim(); const out=[];
   if(fromCommittee){
@@ -1109,8 +1126,7 @@ function itemLines(it){
       const so=it.items.filter(s=>s.text&&s.text.trim());
       if(so.length){
         so.forEach(s=>{
-          out.push(L.cue("Chair",`The next business in order is the special order for «${s.text}».`));
-          voteLines(s.text,"motion",s.two_thirds).forEach(l=>out.push(l));
+          pendingQuestion(`The next business in order is the special order for «${s.text}».`,s.text,s.two_thirds).forEach(l=>out.push(l));
         });
       }else{
         out.push(L.note("Take up any special orders in the order set. If there are none, this heading is passed over."));
@@ -1132,9 +1148,8 @@ function itemLines(it){
       const ui=it.items.filter(s=>s.text&&s.text.trim());
       if(ui.length){
         out.push(L.cue("Chair","We will now take up unfinished business and general orders."));
-        ui.forEach((s,i)=>{
-          out.push(L.note(`Item ${i+1} — the chair states the question:`));
-          motionBlock(s.text,"motion",s.two_thirds).forEach(l=>out.push(l));
+        ui.forEach(s=>{
+          pendingQuestion(`The next business in order is the question on «${s.text}».`,s.text,s.two_thirds).forEach(l=>out.push(l));
         });
       }else{
         out.push(L.note("The chair takes up, in order, any business postponed from the previous meeting and any general orders, stating each by name. RONR: it is improper to ask \u201cIs there any unfinished business?\u201d \u2014 the chair is presumed to know what is pending. If there is none, this heading is passed over in silence."));
@@ -1377,12 +1392,28 @@ function partOptions(){
           opts.push({value:`com:${i}:${j}`,label:`${r.committee.trim()} Committee`+(r.reporter&&r.reporter.trim()?` — ${r.reporter.trim()}`:"")});
       });
     }
+    // A named mover on a member-introduced item unlocks that member's cue card.
+    if(["new_business","called_business","resolutions"].includes(it.kind) && Array.isArray(it.items)){
+      it.items.forEach((s,j)=>{
+        if(s && s.mover && s.mover.trim() && s.text && s.text.trim()){
+          const snip=s.text.trim().replace(/\s+/g," ");
+          const short=snip.length>40?snip.slice(0,40).trim()+"…":snip;
+          opts.push({value:`mov:${i}:${j}`,label:`${s.mover.trim()} — move ${short}`});
+        }
+      });
+    }
   });
   return opts;
 }
 
 function buildPartScript(part){
   if(part==="secretary") return secretaryScript();
+  const mv=/^mov:(\d+):(\d+)$/.exec(part);
+  if(mv){
+    const it=state.agenda[+mv[1]]; const sub=it&&it.items&&it.items[+mv[2]];
+    if(!sub) return {docTitle:"Member's Script",lines:[L.note("This part is no longer in the agenda. Choose another from “Script for.”")]};
+    return moverScript(it,sub);
+  }
   const m=/^(off|com):(\d+):(\d+)$/.exec(part);
   if(m){
     const it=state.agenda[+m[2]]; const r=it&&it.reports&&it.reports[+m[3]];
@@ -1394,6 +1425,29 @@ function buildPartScript(part){
 
 // helper: a "listen for" cue rendered as a stage direction
 const cueFor=t=>({type:"direction",text:`Cue ▸ the chair says: “${t}”`});
+
+// Cue card for the member who will move a member-introduced item. The motion
+// line matches motionBlock's wording so the chair's and mover's scripts agree.
+function moverScript(item,sub){
+  const mover=(sub&&sub.mover&&sub.mover.trim())?sub.mover.trim():"";
+  const text=(sub&&sub.text&&sub.text.trim())?sub.text.trim():"…";
+  const lines=[];
+  lines.push(L.note(`Script for ${mover||"the mover"} — to move this item. Wait for your cue, then take your part.`));
+  lines.push({type:"heading",title:"Your Motion"});
+  const cueText = item.kind==="called_business"
+    ? "The Secretary will read the call of this meeting."
+    : "Is there any new business?";
+  lines.push(cueFor(cueText));
+  lines.push(L.dir("Rise and address the chair."));
+  lines.push(L.cue(mover||"Member",`${addr()}.`));
+  lines.push(L.dir("The chair recognizes you."));
+  lines.push(L.cue(mover||"Member", item.kind==="resolutions"
+    ? `I move the adoption of the following resolution: «${text}»`
+    : `I move that «${text}»`));
+  lines.push(L.dir("Another member seconds the motion."));
+  lines.push(L.note("Once the motion is stated by the chair, you may speak first in debate."));
+  return {docTitle:`${mover||"Mover"}'s Script`,lines};
+}
 
 function secretaryScript(){
   const lines=[];
